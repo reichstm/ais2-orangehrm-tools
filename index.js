@@ -50,6 +50,24 @@ function ensureAuthenticated(req, res, next) {
     res.redirect(contextRoot + "/login");
 }
 
+// GET /
+app.get('/', ensureAuthenticated, async (req, res) => {
+    const user = req.session.user;
+    const root = contextRoot || '';
+    const body = `
+    <div class="bg-white p-6 rounded-lg shadow">
+      <h2 class="text-xl font-semibold mb-4">Welcome ${user.name}</h2>
+      <ul class="space-y-2">
+        <li><a class="text-blue-600 hover:underline" href="${root}/timesheet">View Time Sheet</a></li>
+        <li><a class="text-blue-600 hover:underline" href="${root}/leave-calendar">Show Leave Calendar</a></li>
+        <li><a class="text-blue-600 hover:underline" href="${root}/attendance-diff">Show Differences between Attendance and Time Sheets</a></li>
+        <li><a class="text-red-600 hover:underline" href="${root}/logout">Logout</a></li>
+      </ul>
+    </div>
+  `;
+    res.send(renderPage('Home', body));
+});
+
 // --- Login Form ---
 app.get('/login', (req, res) => {
     res.send(`
@@ -188,24 +206,6 @@ app.get('/login', (req, res) => {
     </div>
   `;
     res.send(renderPage('Login', body, '<style>body{background:#f3f4f6}</style>'));
-});
-
-// GET /
-app.get('/', ensureAuthenticated, async (req, res) => {
-    const user = req.session.user;
-    const root = contextRoot || '';
-    const body = `
-    <div class="bg-white p-6 rounded-lg shadow">
-      <h2 class="text-xl font-semibold mb-4">Welcome ${user.name}</h2>
-      <ul class="space-y-2">
-        <li><a class="text-blue-600 hover:underline" href="${root}/timesheet">View Time Sheet</a></li>
-        <li><a class="text-blue-600 hover:underline" href="${root}/leave-calendar">Show Leave Calendar</a></li>
-        <li><a class="text-blue-600 hover:underline" href="${root}/attendance-diff">Show Differences between Attendance and Time Sheets</a></li>
-        <li><a class="text-red-600 hover:underline" href="${root}/logout">Logout</a></li>
-      </ul>
-    </div>
-  `;
-    res.send(renderPage('Home', body));
 });
 
 // GET /timesheet (form)

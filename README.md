@@ -79,8 +79,13 @@ Create or modify your Apache site config (e.g. `/etc/apache2/sites-available/ora
     # Proxy for Node.js app
     ProxyRequests Off
     ProxyPreserveHost On
-    ProxyPass /ais2 http://localhost:3000/ais2
-    ProxyPassReverse /ais2 http://localhost:3000/ais2
+    ProxyPass /ais2/ http://localhost:3000/
+    ProxyPassReverse /ais2/ http://localhost:3000/
+ 
+    # Optional: avoid trailing slash issues
+    <Location /ais2/>
+        Require all granted
+    </Location>
 
     ErrorLog ${APACHE_LOG_DIR}/orangehrm_error.log
     CustomLog ${APACHE_LOG_DIR}/orangehrm_access.log combined
