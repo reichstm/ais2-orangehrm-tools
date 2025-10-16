@@ -56,9 +56,10 @@ app.get('/', ensureAuthenticated, async (req, res) => {
     <div class="bg-white p-6 rounded-lg shadow">
       <h2 class="text-xl font-semibold mb-4">Welcome ${user.name}</h2>
       <ul class="space-y-2">
+        <li><a class="text-blue-600 hover:underline" href="${root}/attendances">View Attendances</a></li>
         <li><a class="text-blue-600 hover:underline" href="${root}/timesheet">View Time Sheet</a></li>
-        <li><a class="text-blue-600 hover:underline" href="${root}/leave-calendar">Show Leave Calendar</a></li>
         <li><a class="text-blue-600 hover:underline" href="${root}/attendance-diff">Show Differences between Attendance and Time Sheets</a></li>
+        <li><a class="text-blue-600 hover:underline" href="${root}/leave-calendar">Show Leave Calendar</a></li>
         <li><a class="text-red-600 hover:underline" href="${root}/logout">Logout</a></li>
       </ul>
     </div>
@@ -171,9 +172,7 @@ function renderPage(title, body, extraHead = '') {
           <h1 class="text-xl font-semibold">${title}</h1>
           <nav class="space-x-4 text-sm">
             <a class="text-blue-600 hover:underline" href="${root}/">Home</a>
-            <a class="text-blue-600 hover:underline" href="${root}/timesheet">Time Sheet</a>
             <a class="text-blue-600 hover:underline" href="${root}/leave-calendar">Leave Calendar</a>
-            <a class="text-blue-600 hover:underline" href="${root}/attendance-diff">Attendance Diff</a>
             <a class="text-red-600 hover:underline" href="${root}/logout">Logout</a>
           </nav>
         </div>
@@ -450,6 +449,109 @@ app.get('/attendance-diff', ensureAuthenticated, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).send(renderPage('Error', '<div class="bg-white p-6 rounded shadow">Database error</div>'));
+    }
+});
+
+app.get('/attendances', ensureAuthenticated, (req, res) => {
+    const root = contextRoot || '';
+    const today = new Date();
+    const firstDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1)).toISOString().split("T")[0];
+    const lastDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0)).toISOString().split("T")[0];
+
+    const body = `
+    <div class="max-w-lg mx-auto bg-white p-6 rounded shadow">
+      <h2 class="text-xl font-medium mb-4">Show Attendances</h2>
+      <form method="post" action="${root}/attendances" class="space-y-4">
+        <label class="block">From: <input class="mt-1 border rounded px-2 py-1" type="date" name="from" value="${firstDay}"></label>
+        <label class="block">To: <input class="mt-1 border rounded px-2 py-1" type="date" name="to" value="${lastDay}"></label>
+        <div class="flex justify-end">
+          <button class="bg-blue-600 text-white px-4 py-2 rounded" type="submit">Show</button>
+        </div>
+      </form>
+    </div>
+  `;
+    res.send(renderPage('Time Sheet', body));
+});
+
+app.post('/attendances', ensureAuthenticated, async (req, res) => {
+    const username = req.session.user.name;
+    const { from, to } = req.body;
+
+    // Default date range if none provided
+    const fromDate = from && from.trim() !== '' ? from : '0001-01-01';
+    const toDate = to && to.trim() !== '' ? to : '9999-12-31';
+
+    try {
+        const [rows] = await pool.query(
+            `SELECT ar.punch_in_utc_time                                                   AS punch_in,
+                    ar.punch_out_utc_time                                                  AS punch_out,
+                    TIMEDIFF(ar.punch_out_utc_time, ar.punch_in_utc_time)                  AS duration,
+                    SUM(TIMESTAMPDIFF(SECOND, ar.punch_in_utc_time, ar.punch_out_utc_time))
+                        OVER (PARTITION BY WEEK(ar.punch_in_utc_time, 1)) / 60 / 60        AS hours_per_week,
+                    SUM(TIMESTAMPDIFF(SECOND, ar.punch_in_utc_time, ar.punch_out_utc_time))
+                        OVER (PARTITION BY WEEK(ar.punch_in_utc_time, 1)) / 60 / 60 - 38.5 AS difference_per_week
+             FROM orangehrm.ohrm_attendance_record ar
+                      JOIN orangehrm.ohrm_user u ON ar.employee_id = u.emp_number
+             WHERE u.user_name = ?
+               AND ar.punch_in_utc_time >= ?
+               AND ar.punch_in_utc_time <= ?
+             ORDER BY u.emp_number, ar.punch_in_utc_time`,
+            [username, fromDate, toDate]
+        );
+
+        if (!rows.length) {
+            return res.send(`
+        <h2>No attendance records found for ${username}</h2>
+        <a href="${contextRoot}">Back</a>
+      `);
+        }
+
+        let tableRows = rows.map(r => {
+            const punchIn = r.punch_in ? new Date(r.punch_in).toLocaleString(): r.punch_in;
+            const punchOut = r.punch_out ? new Date(r.punch_out).toLocaleString(): r.punch_out;
+            const hoursPerWeek = r.hours_per_week && Number(r.hours_per_week) ? Number(r.hours_per_week).toFixed(2) : '0.00';
+            const differencePerWeek = r.difference_per_week && Number(r.difference_per_week) ? Number(r.difference_per_week).toFixed(2) : '0.00';
+            return `
+        <tr class="bg-white">
+          <td class="px-4 py-2 border">${punchIn}</td>
+          <td class="px-4 py-2 border">${punchOut}</td>
+          <td class="px-4 py-2 border text-right">${r.duration}</td>
+          <td class="px-4 py-2 border text-right">${hoursPerWeek}</td>
+          <td class="px-4 py-2 border text-right">${differencePerWeek}</td>
+        </tr>`;
+        }).join('');
+
+        const root = contextRoot || '';
+        const body = `
+      <div class="bg-white p-6 rounded shadow">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold">Attendances</h2>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full border-collapse">
+            <thead class="bg-gray-100">
+              <tr>
+                <th class="px-4 py-2 border text-left">Punch In</th>
+                <th class="px-4 py-2 border text-left">Punch Out</th>
+                <th class="px-4 py-2 border text-right">Hours</th>
+                <th class="px-4 py-2 border text-left">Weekly Hours</th>
+                <th class="px-4 py-2 border text-left">Difference to 38.5h</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tableRows}
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-4">
+          <a class="text-blue-600 hover:underline" href="${root}/">Back</a>
+        </div>
+      </div>
+    `;
+        res.send(renderPage('Attendances', body));
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Database error');
     }
 });
 
