@@ -27,9 +27,7 @@ const pool = mysql.createPool({
 async function testConnection() {
     try {
         // Einen Pool-Connection abrufen
-        await pool.getConnection(reason => {
-            if (reason) throw reason;
-        });
+        const connection = await pool.getConnection();
         console.log('✅ MySQL Pool connected successfully');
 
         // Optional: Testabfrage
@@ -124,7 +122,7 @@ app.get('/timesheet/csv', ensureAuthenticated, async (req, res) => {
             `SELECT e.user_name,
                     tr.date,
                     tr.duration / 60 / 60 AS hours,
-                    SUM(tr.duration)         OVER () / 60 / 60 AS overall, p.name AS project_name,
+                    p.name AS project_name,
                     a.name                AS activity_name,
                     tr.comment
              FROM ohrm_timesheet_item tr
@@ -211,12 +209,16 @@ app.get('/login', (req, res) => {
 // GET /timesheet (form)
 app.get('/timesheet', ensureAuthenticated, (req, res) => {
     const root = contextRoot || '';
+    const today = new Date();
+    const firstDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1)).toISOString().split("T")[0];
+    const lastDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0)).toISOString().split("T")[0];
+
     const body = `
     <div class="max-w-lg mx-auto bg-white p-6 rounded shadow">
       <h2 class="text-xl font-medium mb-4">Show Time Sheet</h2>
       <form method="post" action="${root}/timesheet" class="space-y-4">
-        <label class="block">From: <input class="mt-1 border rounded px-2 py-1" type="date" name="from"></label>
-        <label class="block">To: <input class="mt-1 border rounded px-2 py-1" type="date" name="to"></label>
+        <label class="block">From: <input class="mt-1 border rounded px-2 py-1" type="date" name="from" value="${firstDay}"></label>
+        <label class="block">To: <input class="mt-1 border rounded px-2 py-1" type="date" name="to" value="${lastDay}"></label>
         <div class="flex justify-end">
           <button class="bg-blue-600 text-white px-4 py-2 rounded" type="submit">Show</button>
         </div>
@@ -239,7 +241,7 @@ app.post('/timesheet', ensureAuthenticated, async (req, res) => {
             `SELECT e.user_name,
                     tr.date,
                     tr.duration / 60 / 60 AS hours,
-                    SUM(tr.duration)         OVER () / 60 / 60 AS overall, p.name AS project_name,
+                    p.name AS project_name,
                     a.name                AS activity_name,
                     tr.comment
              FROM ohrm_timesheet_item tr
@@ -259,14 +261,12 @@ app.post('/timesheet', ensureAuthenticated, async (req, res) => {
 
         let tableRows = rows.map(r => {
             const hours = Number(r.hours);
-            const overall = Number(r.overall);
             const date = r.date.toISOString().split('T')[0];
             return `
         <tr class="bg-white">
           <td class="px-4 py-2 border">${r.user_name}</td>
           <td class="px-4 py-2 border">${date}</td>
           <td class="px-4 py-2 border text-right">${hours.toFixed(2)}</td>
-          <td class="px-4 py-2 border text-right">${overall.toFixed(2)}</td>
           <td class="px-4 py-2 border">${r.project_name}</td>
           <td class="px-4 py-2 border">${r.activity_name}</td>
           <td class="px-4 py-2 border">${r.comment || ''}</td>
@@ -290,7 +290,6 @@ app.post('/timesheet', ensureAuthenticated, async (req, res) => {
                 <th class="px-4 py-2 border text-left">User</th>
                 <th class="px-4 py-2 border text-left">Date</th>
                 <th class="px-4 py-2 border text-right">Hours</th>
-                <th class="px-4 py-2 border text-right">Overall</th>
                 <th class="px-4 py-2 border text-left">Project</th>
                 <th class="px-4 py-2 border text-left">Activity</th>
                 <th class="px-4 py-2 border text-left">Comment</th>
