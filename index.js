@@ -555,6 +555,74 @@ app.post('/attendances', ensureAuthenticated, async (req, res) => {
     }
 });
 
+app.get('/leave-calendar.ics', async (req, res) => {
+    try {
+        // ✅ Check for API key in query or header
+        const apiKey = req.query.apiKey || req.headers['x-api-key'];
+        if (apiKey !== process.env.CALENDAR_API_KEY) {
+            return res.status(401).send('Unauthorized');
+        }
+
+        const [rows] = await pool.query(`
+      SELECT DISTINCT
+             CONCAT(e.emp_firstname, ' ', e.emp_lastname) AS employee_name,
+             ls.name AS leave_status,
+             lt.name AS leave_type,
+             l.date AS start_date,
+             l.date + INTERVAL (l.length_days - 1) DAY AS end_date
+      FROM orangehrm.ohrm_leave l
+               JOIN hs_hr_employee e ON l.emp_number = e.emp_number
+               JOIN ohrm_user u ON l.emp_number = e.emp_number
+               JOIN ohrm_leave_status ls ON l.status = ls.status
+               JOIN ohrm_leave_type lt ON l.leave_type_id = lt.id
+      WHERE l.date > CURRENT_DATE
+      ORDER BY l.date;
+    `);
+
+        // ✅ Build iCalendar feed
+        let ics = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//OrangeHRM//AIS2//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+`;
+
+        rows.forEach(r => {
+            const start = r.start_date.toISOString().split('T')[0].replace(/-/g, '');
+            const end = new Date(r.end_date);
+            end.setDate(end.getDate() + 1);
+            const endStr = end.toISOString().split('T')[0].replace(/-/g, '');
+
+            const title = `${r.employee_name} - ${r.leave_type}`;
+            const description = `Leave type: ${r.leave_type}\nStatus: ${r.leave_status}\nRecorded in OrangeHRM.`;
+
+            ics += `BEGIN:VEVENT
+UID:${r.employee_name}-${start}@ais2
+SUMMARY:${title}
+DESCRIPTION:${description}
+CATEGORIES:${r.leave_type}
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+CLASS:PUBLIC
+DTSTART;VALUE=DATE:${start}
+DTEND;VALUE=DATE:${endStr}
+END:VEVENT
+`;
+        });
+
+        ics += 'END:VCALENDAR';
+
+        res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+        res.setHeader('Content-Disposition', 'inline; filename="leave-calendar.ics"');
+        res.send(ics);
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Error generating calendar');
+    }
+});
+
+
 // --- Start server ---
 app.listen(3000, () => console.log('Server running on port 3000'));
 

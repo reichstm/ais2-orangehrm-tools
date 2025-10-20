@@ -148,12 +148,13 @@ Users log in with their OrangeHRM username and password.
 
 ## 📊 8. Features
 
-| Feature | Description                                                             |
-|----------|-------------------------------------------------------------------------|
-| **Show Timesheet** | Query timesheets for a user with optional date filters and total hours. |
-| **Leave Calendar** | Displays all upcoming leaves of all employees using FullCalendar.       |
-| **Attendance Differences** | Compares attended vs booked hours and shows differences.                |
-| **CSV Export** | Available for timesheets.                                               |
+| Feature                    | Description                                                                   |
+|----------------------------|-------------------------------------------------------------------------------|
+| **Show Timesheet**         | Query timesheets for a user with optional date filters and total hours.       |
+| **Leave Calendar**         | Displays all upcoming leaves of all employees using FullCalendar.             |
+| **Attendance Differences** | Compares attended vs booked hours and shows differences.                      |
+| **CSV Export**             | Available for timesheets.                                                     |
+| **ICS Calendar**           | Endpoint for integration of absences tracked in OrangeHRM for MS Outlook etc. |
 
 ---
 
