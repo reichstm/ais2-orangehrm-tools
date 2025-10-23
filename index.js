@@ -327,7 +327,7 @@ app.get('/leave-calendar', ensureAuthenticated, async (req, res) => {
                  JOIN ohrm_user u ON l.emp_number = e.emp_number
                  JOIN ohrm_leave_status ls ON l.status = ls.status
                  JOIN ohrm_leave_type lt ON l.leave_type_id = lt.id
-             WHERE l.date > CURRENT_DATE`
+             WHERE l.date >= CURRENT_DATE - 7`
         );
 
         const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b'];
@@ -575,7 +575,7 @@ app.get('/leave-calendar.ics', async (req, res) => {
                JOIN ohrm_user u ON l.emp_number = e.emp_number
                JOIN ohrm_leave_status ls ON l.status = ls.status
                JOIN ohrm_leave_type lt ON l.leave_type_id = lt.id
-      WHERE l.date > CURRENT_DATE
+      WHERE l.date >= CURRENT_DATE - 7
       ORDER BY l.date;
     `);
 
