@@ -486,6 +486,7 @@ app.post('/attendances', ensureAuthenticated, async (req, res) => {
             `SELECT ar.punch_in_utc_time                                                   AS punch_in,
                     ar.punch_out_utc_time                                                  AS punch_out,
                     TIMEDIFF(ar.punch_out_utc_time, ar.punch_in_utc_time)                  AS duration,
+                    TIMESTAMPDIFF(MINUTE, ar.punch_in_utc_time, ar.punch_out_utc_time) / 60       AS attended_hours,
                     SUM(TIMESTAMPDIFF(SECOND, ar.punch_in_utc_time, ar.punch_out_utc_time))
                         OVER (PARTITION BY WEEK(ar.punch_in_utc_time, 1)) / 60 / 60        AS hours_per_week,
                     SUM(TIMESTAMPDIFF(SECOND, ar.punch_in_utc_time, ar.punch_out_utc_time))
@@ -506,11 +507,17 @@ app.post('/attendances', ensureAuthenticated, async (req, res) => {
       `);
         }
 
+        let sumAttendedHours = 0;
+        let attendedDatesSet = new Set();
+
         let tableRows = rows.map(r => {
             const punchIn = r.punch_in ? new Date(r.punch_in).toLocaleString(): r.punch_in;
             const punchOut = r.punch_out ? new Date(r.punch_out).toLocaleString(): r.punch_out;
             const hoursPerWeek = r.hours_per_week && Number(r.hours_per_week) ? Number(r.hours_per_week).toFixed(2) : '0.00';
             const differencePerWeek = r.difference_per_week && Number(r.difference_per_week) ? Number(r.difference_per_week).toFixed(2) : '0.00';
+            const attendedHours = r.attended_hours && Number(r.attended_hours) ? Number(r.attended_hours) : 0;
+            sumAttendedHours += attendedHours;
+            attendedDatesSet.add(punchIn.split(' ')[0]); // Collect unique dates
             return `
         <tr class="bg-white">
           <td class="px-4 py-2 border">${punchIn}</td>
@@ -526,6 +533,11 @@ app.post('/attendances', ensureAuthenticated, async (req, res) => {
       <div class="bg-white p-6 rounded shadow">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-lg font-semibold">Attendances</h2>
+          <div class="text-sm text-gray-600">
+            Total attended: <strong>${sumAttendedHours.toFixed(2)}h</strong>
+            &nbsp; Planned: <strong>${(attendedDatesSet.size * 7.7).toFixed(2)}h</strong>
+            &nbsp; Difference: <strong>${(sumAttendedHours - (attendedDatesSet.size * 7.7)).toFixed(2)}h</strong>
+          </div>
         </div>
         <div class="overflow-x-auto">
           <table class="min-w-full border-collapse">
