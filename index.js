@@ -315,7 +315,6 @@ app.post('/timesheet', ensureAuthenticated, async (req, res) => {
 app.get('/leave-calendar', ensureAuthenticated, async (req, res) => {
     try {
         const [rows] = await pool.query(
-            // same query as before
             `SELECT DISTINCT CONCAT(e.emp_firstname, ' ', e.emp_lastname) AS employee_name,
                              ls.name                                      AS leave_status,
                              lt.name                                      AS leave_type,
@@ -328,6 +327,10 @@ app.get('/leave-calendar', ensureAuthenticated, async (req, res) => {
                  JOIN ohrm_leave_status ls ON l.status = ls.status
                  JOIN ohrm_leave_type lt ON l.leave_type_id = lt.id
              WHERE l.date >= CURRENT_DATE - 7 AND l.status > 1`
+        );
+
+        const [holidays] = await pool.query(
+            `SELECT description, date FROM ohrm_holiday WHERE date >= CURRENT_DATE - 7 ORDER BY date`
         );
 
         const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b'];
@@ -347,6 +350,16 @@ app.get('/leave-calendar', ensureAuthenticated, async (req, res) => {
                 color: color,
                 allDay: true
             };
+        });
+
+        holidays.forEach(h => {
+            events.push({
+                title: h.description,
+                start: h.date,
+                color: '#e11d48',
+                allDay: true,
+                display: 'background'
+            });
         });
 
         const extraHead = `<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.19/index.global.min.js"></script>`;
