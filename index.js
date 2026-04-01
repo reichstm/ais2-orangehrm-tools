@@ -600,9 +600,13 @@ app.get('/leave-calendar.ics', async (req, res) => {
                JOIN ohrm_user u ON l.emp_number = e.emp_number
                JOIN ohrm_leave_status ls ON l.status = ls.status
                JOIN ohrm_leave_type lt ON l.leave_type_id = lt.id
-      WHERE l.date >= CURRENT_DATE - 7 AND l.status > 1
+      WHERE l.date >= CURRENT_DATE - 14 AND l.status > 1
       ORDER BY l.date;
     `);
+
+        const [holidays] = await pool.query(
+            `SELECT description, date FROM ohrm_holiday WHERE date >= CURRENT_DATE - 14 ORDER BY date`
+        );
 
         // ✅ Build iCalendar feed
         let ics = `BEGIN:VCALENDAR
@@ -626,6 +630,26 @@ UID:${r.employee_name}-${start}@ais2
 SUMMARY:${title}
 DESCRIPTION:${description}
 CATEGORIES:${r.leave_type}
+STATUS:CONFIRMED
+TRANSP:TRANSPARENT
+CLASS:PUBLIC
+DTSTART;VALUE=DATE:${start}
+DTEND;VALUE=DATE:${endStr}
+END:VEVENT
+`;
+        });
+
+        holidays.forEach(h => {
+            const start = h.date.toISOString().split('T')[0].replace(/-/g, '');
+            const end = new Date(h.date);
+            end.setDate(end.getDate() + 1);
+            const endStr = end.toISOString().split('T')[0].replace(/-/g, '');
+
+            ics += `BEGIN:VEVENT
+UID:holiday-${start}-${h.description.replace(/\s+/g, '-')}@ais2
+SUMMARY:${h.description}
+DESCRIPTION:Public holiday
+CATEGORIES:Holiday
 STATUS:CONFIRMED
 TRANSP:TRANSPARENT
 CLASS:PUBLIC
